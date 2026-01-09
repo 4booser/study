@@ -17,7 +17,7 @@ namespace WebApplication1.Controllers
 
             var cmd = new SqliteCommand("SELECT Id, list FROM Lists", db);
             using var reader = cmd.ExecuteReader();
-
+            
             while (reader.Read())
             {
                 int id = reader.GetInt32(0);       // колонка Id
