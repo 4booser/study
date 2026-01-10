@@ -1,58 +1,107 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
-
+using System.Collections.Generic;
 
 namespace WebApplication1.Controllers
 {
+    public class ListDto
+    {
+        public int Id { get; set; }
+        public string Text { get; set; }
+    }
 
     [ApiController]
     [Route("new_list")]
     public class AuthController : ControllerBase
     {
+        // ------------------------------
+        // 1. Здесь объявляем строку подключения
+        // ------------------------------
+        private const string ConnectionString = "Data Source=TodoList.db";
+
         [HttpGet("ping")]
         public IActionResult Ping()
         {
-            using var db = new SqliteConnection("Data Source=TodoList.db");
+            // ------------------------------
+            // 2. Используем переменную ConnectionString
+            // ------------------------------
+            using var db = new SqliteConnection(ConnectionString);
             db.Open();
 
-            var cmd = new SqliteCommand("SELECT Id, list FROM Lists", db);
+            var result = new List<ListDto>();
+
+            using var cmd = new SqliteCommand(
+                @"SELECT l.Id, l.Text
+                  FROM Lists l
+                  JOIN UserTokens u ON u.Id = l.UserTokenId
+                  WHERE u.Token = @token", db);
+
+            cmd.Parameters.AddWithValue("@token", "abc1231");
+
             using var reader = cmd.ExecuteReader();
-            
+
             while (reader.Read())
             {
-                int id = reader.GetInt32(0);       // колонка Id
-                string text = reader.GetString(1); // колонка Text
-                Console.WriteLine($"{id}: {text}");
+                result.Add(new ListDto
+                {
+                    Id = reader.GetInt32(0),
+                    Text = reader.GetString(1)
+                });
             }
 
-            return Ok("API работает");
+            return Ok(result);
         }
 
         [HttpPost("post")]
-        public IActionResult Post(string _list)
+        public IActionResult Post(string text)
         {
-            using var db = new SqliteConnection("Data Source=TodoList.db");
+            using var db = new SqliteConnection(ConnectionString);
             db.Open();
 
-            Console.WriteLine(_list);
-
+            // ------------------------------
+            // 3. Создание таблиц, если их нет
+            // ------------------------------
+            new SqliteCommand(
+            @"CREATE TABLE IF NOT EXISTS UserTokens (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Token TEXT NOT NULL UNIQUE
+            )", db).ExecuteNonQuery();
 
             new SqliteCommand(
-                @"CREATE TABLE IF NOT EXISTS Lists (
-        Id INTEGER PRIMARY KEY AUTOINCREMENT,
-        Text TEXT NOT NULL
-    )", db
-            ).ExecuteNonQuery();
+            @"CREATE TABLE IF NOT EXISTS Lists (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserTokenId INTEGER NOT NULL,
+                Text TEXT NOT NULL,
+                FOREIGN KEY (UserTokenId) REFERENCES UserTokens(Id)
+            )", db).ExecuteNonQuery();
 
-            new SqliteCommand($"INSERT INTO Lists (list) VALUES ('{_list}')", db).ExecuteNonQuery();
+            // ------------------------------
+            // 4. Вставка токена, если его нет
+            // ------------------------------
+            new SqliteCommand(
+                @"INSERT OR IGNORE INTO UserTokens(Token)
+                  VALUES ('abc1231')", db).ExecuteNonQuery();
 
-            return Ok("API работает");
+            // ------------------------------
+            // 5. Получение Id токена
+            // ------------------------------
+            var getTokenId = new SqliteCommand(
+                @"SELECT Id FROM UserTokens WHERE Token = 'abc1231'", db);
+
+            var userTokenId = (long)getTokenId.ExecuteScalar();
+
+            // ------------------------------
+            // 6. Вставка нового списка
+            // ------------------------------
+            using var insertCmd = new SqliteCommand(
+                @"INSERT INTO Lists (UserTokenId, Text)
+                  VALUES (@userTokenId, @text)", db);
+
+            insertCmd.Parameters.AddWithValue("@userTokenId", userTokenId);
+            insertCmd.Parameters.AddWithValue("@text", text);
+            insertCmd.ExecuteNonQuery();
+
+            return Ok("List added");
         }
     }
 }
-
-
-
-
- 
-
