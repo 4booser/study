@@ -36,7 +36,7 @@ namespace ConsoleApp1
 
 
 
-            string userToken = "abc1233";
+            string userToken = "abc1233ппН";
 
             // Добавление текста
             var insertCmd = connection.CreateCommand();

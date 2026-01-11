@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using System.Collections.Generic;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace WebApplication1.Controllers
 {
-    public class ListDto
+    class ListToDo
     {
         public int Id { get; set; }
         public string Text { get; set; }
@@ -14,92 +15,61 @@ namespace WebApplication1.Controllers
     [Route("new_list")]
     public class AuthController : ControllerBase
     {
-        // ------------------------------
-        // 1. Здесь объявляем строку подключения
-        // ------------------------------
+
         private const string ConnectionString = "Data Source=TodoList.db";
 
         [HttpGet("ping")]
-        public IActionResult Ping()
+        public IActionResult Ping([FromHeader(Name = "UserToken")] string user_token)
         {
-            // ------------------------------
-            // 2. Используем переменную ConnectionString
-            // ------------------------------
             using var db = new SqliteConnection(ConnectionString);
             db.Open();
 
-            var result = new List<ListDto>();
 
-            using var cmd = new SqliteCommand(
-                @"SELECT l.Id, l.Text
-                  FROM Lists l
-                  JOIN UserTokens u ON u.Id = l.UserTokenId
-                  WHERE u.Token = @token", db);
+            var selectCmd = db.CreateCommand();
 
-            cmd.Parameters.AddWithValue("@token", "abc1231");
+            selectCmd.CommandText = "SELECT Id, ListText FROM UserLists WHERE Token = @token";
+            selectCmd.Parameters.AddWithValue("@token", user_token);
 
-            using var reader = cmd.ExecuteReader();
+
+            using var reader = selectCmd.ExecuteReader();
+            var result = new List<ListToDo>();
 
             while (reader.Read())
             {
-                result.Add(new ListDto
+                result.Add(new ListToDo
                 {
                     Id = reader.GetInt32(0),
                     Text = reader.GetString(1)
                 });
             }
-
             return Ok(result);
         }
 
+
+
+
         [HttpPost("post")]
-        public IActionResult Post(string text)
+        public IActionResult Post([FromHeader(Name = "UserToken")] string user_token, [FromBody] string text)
         {
             using var db = new SqliteConnection(ConnectionString);
             db.Open();
 
-            // ------------------------------
-            // 3. Создание таблиц, если их нет
-            // ------------------------------
-            new SqliteCommand(
-            @"CREATE TABLE IF NOT EXISTS UserTokens (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Token TEXT NOT NULL UNIQUE
-            )", db).ExecuteNonQuery();
 
-            new SqliteCommand(
-            @"CREATE TABLE IF NOT EXISTS Lists (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserTokenId INTEGER NOT NULL,
-                Text TEXT NOT NULL,
-                FOREIGN KEY (UserTokenId) REFERENCES UserTokens(Id)
-            )", db).ExecuteNonQuery();
+            var tableCmd = db.CreateCommand();
+            tableCmd.CommandText =
 
-            // ------------------------------
-            // 4. Вставка токена, если его нет
-            // ------------------------------
-            new SqliteCommand(
-                @"INSERT OR IGNORE INTO UserTokens(Token)
-                  VALUES ('abc1231')", db).ExecuteNonQuery();
+            @"CREATE TABLE IF NOT EXISTS UserLists 
+            (Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Token TEXT NOT NULL,
+            ListText TEXT NOT NULL)";
+            tableCmd.ExecuteNonQuery();
 
-            // ------------------------------
-            // 5. Получение Id токена
-            // ------------------------------
-            var getTokenId = new SqliteCommand(
-                @"SELECT Id FROM UserTokens WHERE Token = 'abc1231'", db);
 
-            var userTokenId = (long)getTokenId.ExecuteScalar();
 
-            // ------------------------------
-            // 6. Вставка нового списка
-            // ------------------------------
-            using var insertCmd = new SqliteCommand(
-                @"INSERT INTO Lists (UserTokenId, Text)
-                  VALUES (@userTokenId, @text)", db);
-
-            insertCmd.Parameters.AddWithValue("@userTokenId", userTokenId);
-            insertCmd.Parameters.AddWithValue("@text", text);
-            insertCmd.ExecuteNonQuery();
+            tableCmd.CommandText = "INSERT INTO UserLists (Token, ListText) VALUES (@token, @text)";
+            tableCmd.Parameters.AddWithValue("@token", user_token);
+            tableCmd.Parameters.AddWithValue("@text", text);
+            tableCmd.ExecuteNonQuery();
 
             return Ok("List added");
         }
