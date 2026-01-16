@@ -1,24 +1,18 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
-using System.Collections.Generic;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
+using WebApplication1.Data;
 
 namespace WebApplication1.Controllers
 {
-    class ListToDo
-    {
-        public int Id { get; set; }
-        public string Text { get; set; }
-    }
 
     [ApiController]
-    [Route("new_list")]
-    public class AuthController : ControllerBase
+    [Route("ToDoLists")]
+    public class ApiController : ControllerBase
     {
 
         private const string ConnectionString = "Data Source=TodoList.db";
 
-        [HttpGet("ping")]
+        [HttpGet("GetLists")]
         public IActionResult Ping([FromHeader(Name = "UserToken")] string user_token)
         {
             using var db = new SqliteConnection(ConnectionString);
@@ -46,9 +40,7 @@ namespace WebApplication1.Controllers
         }
 
 
-
-
-        [HttpPost("post")]
+        [HttpPost("PostList")]
         public IActionResult Post([FromHeader(Name = "UserToken")] string user_token, [FromBody] string text)
         {
             using var db = new SqliteConnection(ConnectionString);
@@ -63,7 +55,6 @@ namespace WebApplication1.Controllers
             Token TEXT NOT NULL,
             ListText TEXT NOT NULL)";
             tableCmd.ExecuteNonQuery();
-
 
 
             tableCmd.CommandText = "INSERT INTO UserLists (Token, ListText) VALUES (@token, @text)";
